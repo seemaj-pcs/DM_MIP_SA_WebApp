@@ -1,0 +1,6 @@
+@DM_MIP_SA_WebApp_HostAddress = http://localhost:5026
+
+GET {{DM_MIP_SA_WebApp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
