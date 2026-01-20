@@ -4,17 +4,20 @@ using DM_MIP_SA_WebApp.Models;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Identity.Client;
+using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
 
 namespace DM_MIP_SA_WebApp.Services
 {
     public class EmailService
     {
-        public async Task<string> sendEmail(AzureAdOptions azureOptions, 
-                    EmailOptions emailOptions, string fileName, string recepient)
+        public async Task<string> sendEmail(AzureAdOptions azureOptions,
+            MipSdkOptions mipSdkOptions, EmailOptions emailOptions, 
+            string fileName, string recepient, string subject, string action)
         {
-            
-           
             // 2. Configure MSAL for OBO
             IConfidentialClientApplication confidentialClient = ConfidentialClientApplicationBuilder.Create(azureOptions.ClientId)
                 .WithClientSecret(azureOptions.ClientSecret)
@@ -29,64 +32,56 @@ namespace DM_MIP_SA_WebApp.Services
 
             string graphAccessToken = oboResult.Result.AccessToken;
 
-            Console.WriteLine($"graphAccessToken - {graphAccessToken}");
+            Console.WriteLine($"UserToke - {graphAccessToken}");
 
-            // 4. Initialize Graph Client
-            //var options = new OnBehalfOfCredentialOptions
-            //{
-            //    AuthorityHost = AzureAuthorityHosts.AzurePublicCloud,
-            //};
+            var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", graphAccessToken);
 
-            //// The OBO credential exchanges the user token for a new token
-            //var onBehalfOfCredential = new OnBehalfOfCredential(
-            //    azureOptions.TenantId, azureOptions.ClientId, azureOptions.ClientSecret, userToken, options);
-            //var graphClient = new GraphServiceClient(onBehalfOfCredential);
+            subject = "Notification - " + subject;
+            var contents = emailOptions.Contents;
+            contents = contents.Replace("{fileName}", Path.GetFileName(fileName));
+            contents = contents.Replace("{action}", Path.GetFileName(action));
 
-            
-            // The credential exchanges the user token for a new token
-            var onBehalfOfCredential = new ClientSecretCredential(
-                azureOptions.TenantId, azureOptions.ClientId, azureOptions.ClientSecret);
-            var graphClient = new GraphServiceClient(onBehalfOfCredential);
-
-            Console.WriteLine($"graphClient - {graphClient}");
-
-            // 5. Read file and convert to Base64
-
-            byte[] fileBytes = System.IO.File.ReadAllBytes(fileName);
-            string base64File = Convert.ToBase64String(fileBytes);
-
-            var ext = Path.GetExtension(fileName); // returns .exe
-            var fname = Path.GetFileNameWithoutExtension(fileName);
-
-            // 6. Create the message
-
-            var requestBody = new Microsoft.Graph.Me.SendMail.SendMailPostRequestBody
+            var emailPayload = new
             {
-                Message = new Message
+                message = new
                 {
-                    Subject = emailOptions.Subject,
-                    Body = new ItemBody { Content = emailOptions.Contents, ContentType = Microsoft.Graph.Models.BodyType.Text },
-                    ToRecipients = new List<Recipient> { 
-                            new Recipient { EmailAddress = new EmailAddress { Address = recepient } } },
-                    Attachments = new List<Attachment>
+                    subject = subject,
+                    body = new
                     {
-                        new FileAttachment
+                        contentType = "Text",
+                        content = contents
+                    },
+                    toRecipients = new[]
+                    {
+                        new
                         {
-                            OdataType = "#microsoft.graph.fileAttachment",
-                            Name = fname + ext,
-                            ContentType = "text/plain",
-                            ContentBytes = fileBytes // SDK handles byte array to base64 conversion
+                            emailAddress = new
+                            {
+                                address = recepient
+                            }
                         }
                     }
                 },
-                SaveToSentItems = true
+                saveToSentItems = true
             };
 
+            var json = System.Text.Json.JsonSerializer.Serialize(emailPayload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
             Console.WriteLine("Sending email--------------!");
+            var response = await httpClient.PostAsync(
+                "https://graph.microsoft.com/v1.0/users/" + mipSdkOptions.ServiceAccountEmail+ "/sendMail",
+                content);
+
+            response.EnsureSuccessStatusCode();
+
             // 7. Send the mail
-            graphClient.Me.SendMail.PostAsync(requestBody);
+
             Console.WriteLine("Email sent successfully!");
             return "Email sent successfully";
+
         }
     }
 }

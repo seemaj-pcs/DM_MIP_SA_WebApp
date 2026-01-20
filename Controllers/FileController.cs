@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using DM_MIP_SA_WebApp.Models;
+﻿using DM_MIP_SA_WebApp.Models;
 using DM_MIP_SA_WebApp.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder.Extensions;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace DM_MIP_SA_WebApp.Controllers
@@ -12,9 +13,9 @@ namespace DM_MIP_SA_WebApp.Controllers
     {
         private readonly IFileService _fileService;
 
-        public FileController(IFileService fileProtectionService)
+        public FileController(IFileService fileSvc)
         {
-            _fileService = fileProtectionService;
+            _fileService = fileSvc;
         }
 
         [HttpPost("protect")]
@@ -53,7 +54,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
 
             // Cleanup
-            if (p.RetainOutputFiles != null && !p.RetainOutputFiles.Value)
+            if (!_fileService.getMipSdkOptions().RetainOutputFiles)
             {
                 System.IO.File.Delete(fileName);
             }
@@ -126,7 +127,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
 
             // Cleanup
-            if (p.RetainOutputFiles != null && !p.RetainOutputFiles.Value)
+            if (!_fileService.getMipSdkOptions().RetainOutputFiles)
             {
                 System.IO.File.Delete(fileName);
             }

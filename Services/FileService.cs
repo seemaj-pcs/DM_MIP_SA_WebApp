@@ -21,6 +21,8 @@ namespace DM_MIP_SA_WebApp.Services
         Task<string> AdditionalProtectFileWithUserDefinedPermissionsAsync(
            ProtectFileRequest definition,
            string outFileName);
+
+        public MipSdkOptions getMipSdkOptions();
     }
 
     public class FileService : IFileService
@@ -113,7 +115,7 @@ namespace DM_MIP_SA_WebApp.Services
         }
         public async Task<string> ApplyLabelAndProtectionAsync(
             IFormFile req_inFile, string req_email, string req_rights, 
-            bool applyLabelandProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
+            bool applyLabelAndProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
             string outFileName)
         {
             _logger.LogInformation("Starting file protection for: {FileName}", req_inFile.FileName);
@@ -164,7 +166,7 @@ namespace DM_MIP_SA_WebApp.Services
             Console.WriteLine($"---serviceAccountEmail -- {serviceAccountEmail}");
             var fileEngineSettings = new FileEngineSettings(
                 _mipOptions.EngineId,
-                new AuthDelegateImpl(_authService),
+                authDelegate,
                 "",
                 "en-US")
             {
@@ -264,7 +266,7 @@ namespace DM_MIP_SA_WebApp.Services
                     _logger.LogInformation("Committing unprotected file");
                 }
                 //--------Apply label------
-                if (applyLabelandProtection)
+                if (applyLabelAndProtection)
                 {
                     //Apply protection
                     var descriptor = new ProtectionDescriptor(userRightsList);
@@ -283,11 +285,29 @@ namespace DM_MIP_SA_WebApp.Services
 
                 _logger.LogInformation("File protection completed successfully - Output: {OutputPath}, Size: {Size} bytes", outfilePath, fi.Length);
 
-                //if (definition.SendEmail)
-                //{
-                //    await _emailService.sendEmail(_azureAdOptions,
-                //            _emailOptions, outfilePath, definition.Email);
-                //}
+
+                if (_mipOptions.SendEmail)
+                {
+                    var subject = "default";
+                    var action = "default";
+                    if (applyAdditionalProtection)
+                    {
+                        subject = "Additional Permissions Applied";
+                        action = "Additionally Protected";
+                    }
+                    else if (removeLabelAndProtected && !applyAdditionalProtection && !applyLabelAndProtection)
+                    {
+                        subject = "Protection Removed";
+                        action = "Unprotected";
+                    }
+                    else
+                    {
+                        subject = "Protection Applied";
+                        action = "Protected";
+                    }
+                    await _emailService.sendEmail(_azureAdOptions,
+                            _mipOptions, _emailOptions, outfilePath, req_email, subject, action);
+                }
 
                 return outfilePath;
             }
@@ -301,11 +321,12 @@ namespace DM_MIP_SA_WebApp.Services
                     mipContext = null;
                 }
                 catch { }
-                //if (definition.RetainOutputFiles != null && !definition.RetainOutputFiles.Value)
-                //{
-                //    try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
-                //}
+                
             }
+        }
+        public MipSdkOptions getMipSdkOptions()
+        {
+            return _mipOptions;
         }
         private async Task<string> CreateFile(IFormFile file, string dir, String inFileName)
         {

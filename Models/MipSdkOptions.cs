@@ -17,5 +17,10 @@
         public string UnprotectedFileFolder { get; set; } = string.Empty;
 
         public string LabelToApply {  get; set; } = string.Empty;
+
+        public bool SendEmail { get; set; } = false;
+        public bool RetainInputFiles { get; set; } = false;
+        public bool RetainOutputFiles { get; set; } = false;
+
     }
 }

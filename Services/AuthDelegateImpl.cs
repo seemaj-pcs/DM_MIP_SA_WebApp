@@ -9,7 +9,7 @@ namespace DM_MIP_SA_WebApp.Services
     internal class AuthDelegateImpl : IAuthDelegate
     {
         private readonly AuthService _authService;
-
+        private string _token;
         // userAssertionToken = incoming API access token (from Authorization: Bearer ...)
         public AuthDelegateImpl(AuthService authService)
         {
@@ -36,13 +36,18 @@ namespace DM_MIP_SA_WebApp.Services
             
             // For the web API, instead of interactive sign-in we do OBO:
             // use the incoming API token (_userAssertionToken) as the user assertion.
-            var token = _authService
+            _token = _authService
                 .AcquireToken(new[] { $"{resource}/.default" })
                 .GetAwaiter()
                 .GetResult();
 
-            Console.WriteLine($"Successfully acquired  token for MIP SDK --- {token}");
-            return token;
+            Console.WriteLine($"Successfully acquired  token for MIP SDK --- {_token}");
+            return _token;
+        }
+
+        public string getToken()
+        {
+            return _token;
         }
     }
 }

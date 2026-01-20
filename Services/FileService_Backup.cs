@@ -242,11 +242,11 @@ namespace DM_MIP_SA_WebApp.Services
 
                 _logger.LogInformation("File protection completed successfully - Output: {OutputPath}, Size: {Size} bytes", outfilePath, fi.Length);
 
-                if (definition.SendEmail)
-                {
-                    await _emailService.sendEmail(_azureAdOptions,
-                            _emailOptions, outfilePath, definition.Email);
-                }
+                //if (_mipOptions.SendEmail)
+                //{
+                //    await _emailService.sendEmail(_azureAdOptions,
+                //            _emailOptions, outfilePath, definition.Email);
+                //}
 
                 return outfilePath;
             }
@@ -260,9 +260,7 @@ namespace DM_MIP_SA_WebApp.Services
                     mipContext = null;
                 }
                 catch { }
-                if (definition.RetainOutputFiles != null && !definition.RetainOutputFiles.Value) { 
-                    try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
-                }
+                
             }
         }
 
@@ -564,11 +562,11 @@ namespace DM_MIP_SA_WebApp.Services
 
                 _logger.LogInformation("File protection completed successfully - Output: {OutputPath}, Size: {Size} bytes", outfilePath, fi.Length);
 
-                if (definition.SendEmail)
-                {
-                    await _emailService.sendEmail(_azureAdOptions,
-                            _emailOptions, outfilePath, definition.Email);
-                }
+                //if (_mipOptions.SendEmail)
+                //{
+                //    await _emailService.sendEmail(_azureAdOptions,
+                //            _emailOptions, outfilePath, definition.Email);
+                //}
 
                 return outfilePath;
             }
@@ -581,11 +579,7 @@ namespace DM_MIP_SA_WebApp.Services
                     mipContext.ShutDown();
                     mipContext = null;
                 }
-                catch { }
-                if (definition.RetainOutputFiles != null && !definition.RetainOutputFiles.Value)
-                {
-                    try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
-                }
+                catch { }                
             }
         }
         private async Task<string> CreateFile(IFormFile file, string dir, String inFileName)
