@@ -22,5 +22,9 @@
         public bool RetainInputFiles { get; set; } = false;
         public bool RetainOutputFiles { get; set; } = false;
 
+        public Dictionary<string, string> FileRights { get; set; }
+
+        public string UnsupportedFileExtensions {  get; set; }   = string.Empty;
+
     }
 }

@@ -1,6 +1,8 @@
-﻿using DM_MIP_SA_WebApp.Models;
+﻿using Azure.Core;
+using DM_MIP_SA_WebApp.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.Security;
 using Microsoft.InformationProtection;
 using Microsoft.InformationProtection.File;
 using Microsoft.InformationProtection.Protection;
@@ -10,17 +12,25 @@ namespace DM_MIP_SA_WebApp.Services
 {
     public interface IFileService
     {
-        Task<string> ProtectFileWithUserDefinedPermissionsAsync(
-            ProtectFileRequest definition,
+        Task<string> ProtectFileAsync(
+            FileRequest definition,
             string outFileName);
 
         Task<string> UnprotectFileAsync(
-           UnprotectFileRequest definition,
+           FileRequest definition,
            string outFileName);
 
-        Task<string> AdditionalProtectFileWithUserDefinedPermissionsAsync(
-           ProtectFileRequest definition,
+        Task<string> AdditionalProtectFileAsync(
+           FileRequest definition,
            string outFileName);
+
+        Task<string> ProtectFileWithOwnerAsync(
+           FileRequest definition,
+           string outFileName);
+
+        Task<string> ProtectFileWithOwnerAlternateAsync(
+          FileRequest definition,
+          string outFileName);
 
         public MipSdkOptions getMipSdkOptions();
     }
@@ -71,61 +81,74 @@ namespace DM_MIP_SA_WebApp.Services
             }
         }
 
-        public async Task<string> ProtectFileWithUserDefinedPermissionsAsync(
-            ProtectFileRequest definition,
+        public async Task<string> ProtectFileAsync(
+            FileRequest definition,
             string outFileName)
         {
-            if (string.IsNullOrWhiteSpace(_mipOptions.InputFolder))
-                throw new ArgumentException("InputFolder is required in protectionDefinition.", nameof(definition));
-
-            if (string.IsNullOrWhiteSpace(_mipOptions.ProtectedFileFolder))
-                throw new ArgumentException("OutputFolder is required in protectionDefinition.", nameof(definition));
-
-            return await ApplyLabelAndProtectionAsync(
-            definition.File, definition.Email, definition.Rights, 
+           return await ApplyLabelAndProtectionAsync(
+            definition, false,
             true, true, false, outFileName);
         }
 
 
         public async Task<string> UnprotectFileAsync(
-            UnprotectFileRequest definition,
+            FileRequest definition,
             string outFileName)
         {
-            if (string.IsNullOrWhiteSpace(_mipOptions.UnprotectedFileFolder))
-                throw new ArgumentException("OutputFolderPath is required in protectionDefinition.", nameof(definition));
-
             return await ApplyLabelAndProtectionAsync(
-            definition.File, "", "", 
+            definition, false,
             false, true, false, outFileName);
         }
 
-        public async Task<string> AdditionalProtectFileWithUserDefinedPermissionsAsync(
-            ProtectFileRequest definition,
+        public async Task<string> AdditionalProtectFileAsync(
+            FileRequest definition,
             string outFileName)
         {
-            if (string.IsNullOrWhiteSpace(_mipOptions.InputFolder))
-                throw new ArgumentException("InputFolder is required in protectionDefinition.", nameof(definition));
-
-            if (string.IsNullOrWhiteSpace(_mipOptions.ProtectedFileFolder))
-                throw new ArgumentException("OutputFolder is required in protectionDefinition.", nameof(definition));
-
             return await ApplyLabelAndProtectionAsync(
-            definition.File, definition.Email, definition.Rights, 
+            definition, false,
             true, true, true, outFileName);
         }
+        public async Task<string> ProtectFileWithOwnerAsync(
+           FileRequest definition,
+           string outFileName)
+        {
+            return await ApplyLabelAndProtectionAsync(
+             definition, true,
+             true, true, true, outFileName);
+        }
+        public async Task<string> ProtectFileWithOwnerAlternateAsync(
+           FileRequest definition,
+           string outFileName)
+        {
+            return await ApplyLabelAndProtectionAsync(
+             definition, true,
+             true, true, true, outFileName);
+        }
+
         public async Task<string> ApplyLabelAndProtectionAsync(
-            IFormFile req_inFile, string req_email, string req_rights, 
-            bool applyLabelAndProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
+            FileRequest definition, bool overrideOwner, bool applyLabelAndProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
             string outFileName)
         {
-            _logger.LogInformation("Starting file protection for: {FileName}", req_inFile.FileName);
+            _logger.LogInformation("Starting file protection for: {FileName}", definition.FileName);
 
             var inputFolder = _mipOptions.InputFolder;
-
-            string filePath = CreateFile(req_inFile, inputFolder, req_inFile.FileName).Result;
-
+            string filePath = null;
+            if (definition.File != null)
+            {
+                filePath = await CreateFileWithIFormFile(definition.File, inputFolder, definition.File.FileName);
+            }
+            else
+            {
+                filePath = CreateFileWithFileContents(definition.FileName, definition.FileBase64StringContent, inputFolder).Result;
+            }
             _logger.LogInformation($"filePath -------------- {filePath}");
-
+            var ext = Path.GetExtension(filePath); // returns .exe
+            var fname = Path.GetFileNameWithoutExtension(filePath);
+            _logger.LogInformation($"File Extension ------------------ {ext}");
+            if (_mipOptions.UnsupportedFileExtensions.Contains(ext))
+            {
+                throw new Exception("Unsupported File format");
+            }
             var appInfo = new ApplicationInfo
             {
                 ApplicationId = _mipOptions.AppId,
@@ -190,27 +213,53 @@ namespace DM_MIP_SA_WebApp.Services
                     break;
                 }
             }
-            // Build UDP (UserRights) from definition
-
-            var emailList = req_email.Split(",").ToList();
-            var rights = req_rights.Split(",").ToList();
+            _logger.LogInformation($"Adding definition.OwnerEmailId -------- {definition.OwnerEmailId}");
 
             var userRightsList = new List<UserRights>();
-            userRightsList.Add(new UserRights(
-                new List<string> { _mipOptions.ServiceAccountEmail },
-                new List<string> { Rights.Owner, Rights.Extract }));
+            string ownerEmail = _mipOptions.ServiceAccountEmail;
 
-            foreach (var email in emailList)
+            if (definition.OwnerEmailId != null && definition.OwnerEmailId.Trim().Length > 0)
             {
-                userRightsList.Add(new UserRights(new List<string> { email }, rights));
+                ownerEmail = definition.OwnerEmailId;
             }
 
-            _logger.LogInformation("Added permissions for {Email}: {Rights}", req_email, string.Join(", ", rights));
-            _logger.LogInformation("Added owner permissions for caller: {CallerEmail}", _mipOptions.ServiceAccountEmail);
-            
-            if (userRightsList.Count == 0)
-                throw new InvalidOperationException("No valid user permissions were provided.");
+            _logger.LogInformation($"Adding OWNER -------- {ownerEmail}");
+            userRightsList.Add(new UserRights(
+                new List<string> { ownerEmail },
+                new List<string> { Rights.Owner, Rights.Extract }));
 
+            // Build UDP (UserRights) from definition
+            if (definition.FileAccessRightType != null && definition.FileAccessRightType.Length > 0)
+            {
+                var emailList = definition.Email.Split(",").ToList();
+                //var rights = req_rights.Split(",").ToList();
+                var rights2 = definition.FileAccessRightType.Split(",").ToList();
+                var rights = new List<string>();
+                foreach (var r in rights2)
+                {
+                    //switch (r)
+                    //{
+                    //    case "1":
+                    //        rights.Add(Rights.View);
+                    //        break;
+                    //    default:
+                    //        break;
+                    //}
+                    string s = "";
+                    _mipOptions.FileRights.TryGetValue(r, out s);
+                    _logger.LogInformation($"Added permissions for {s}");
+                    rights.Add(s);
+                }
+
+
+                foreach (var email in emailList)
+                {
+                    userRightsList.Add(new UserRights(new List<string> { email }, rights));
+                }
+
+                _logger.LogInformation("Added permissions for {Email}: {Rights}", definition.Email, string.Join(", ", rights));
+                _logger.LogInformation("Added owner permissions for caller: {CallerEmail}", _mipOptions.ServiceAccountEmail);
+            }
             var outputFolder = _mipOptions.ProtectedFileFolder;
             if (!Directory.Exists(outputFolder))
             {
@@ -230,14 +279,29 @@ namespace DM_MIP_SA_WebApp.Services
                         false)
                     .ConfigureAwait(false);
 
-                if (applyAdditionalProtection) { 
+                if (applyAdditionalProtection)
+                {
+                    _logger.LogInformation($"Adding Protection -----");
+
                     var protection = handler.Protection;
-                    
+
                     if (protection != null && protection.ProtectionDescriptor?.UserRights != null)
                     {
                         foreach (var userRight in protection.ProtectionDescriptor.UserRights)
                         {
-                            userRightsList.Add(userRight);
+                            var users = userRight.Users.ToList();
+                            var rs = new List<string>();
+                            
+                            foreach (var r in userRight.Rights)
+                            {
+                                if (overrideOwner && r.Equals("OWNER"))
+                                {
+                                    continue;
+                                }
+                                rs.Add(r);
+                            }
+                           _logger.LogInformation($"Adding -----Users- {string.Join(", ", users)} -Rights--- {string.Join(", ", rs)}");
+                            userRightsList.Add(new UserRights(users, rs));
                         }
                     }
                 }
@@ -268,6 +332,14 @@ namespace DM_MIP_SA_WebApp.Services
                 //--------Apply label------
                 if (applyLabelAndProtection)
                 {
+                    foreach (var ur in userRightsList)
+                    {
+                        _logger.LogInformation($"Dumping =========== Users- {string.Join(", ", ur.Users)} -Rights--- {string.Join(", ", ur.Rights)}");
+                    }
+
+                    if (userRightsList.Count == 0)
+                        throw new InvalidOperationException("No valid user permissions were provided.");
+
                     //Apply protection
                     var descriptor = new ProtectionDescriptor(userRightsList);
                     handler.SetProtection(descriptor, new ProtectionSettings());
@@ -306,8 +378,9 @@ namespace DM_MIP_SA_WebApp.Services
                         action = "Protected";
                     }
                     await _emailService.sendEmail(_azureAdOptions,
-                            _mipOptions, _emailOptions, outfilePath, req_email, subject, action);
+                            _mipOptions, _emailOptions, outfilePath, definition.Email, subject, action);
                 }
+
 
                 return outfilePath;
             }
@@ -321,14 +394,15 @@ namespace DM_MIP_SA_WebApp.Services
                     mipContext = null;
                 }
                 catch { }
-                
+
             }
         }
         public MipSdkOptions getMipSdkOptions()
         {
             return _mipOptions;
         }
-        private async Task<string> CreateFile(IFormFile file, string dir, String inFileName)
+
+        private async Task<string> CreateFileWithIFormFile(IFormFile file, string dir, String inFileName)
         {
             if (!Directory.Exists(dir))
             {
@@ -344,12 +418,37 @@ namespace DM_MIP_SA_WebApp.Services
                 $"{Guid.NewGuid()}_{inFileName}");
             }
             // Save temp file
-            
+
             using (var stream = new FileStream(tempPath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
             return tempPath;
         }
+        private async Task<string> CreateFileWithFileContents(string fileName, string fileBase64String, string dir)
+        {
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var tempPath = Path.Combine(dir,
+                $"{fileName}");
+
+            if (File.Exists(tempPath))
+            {
+                tempPath = Path.Combine(dir,
+                $"{Guid.NewGuid()}_{fileName}");
+            }
+            // Save temp file
+            // Convert the Base64 string to a byte array
+            byte[] fileBytes = Convert.FromBase64String(fileBase64String);
+
+            // Write the byte array to the specified file path
+            File.WriteAllBytes(tempPath, fileBytes);
+
+            return tempPath;
+        }
     }
+
 }

@@ -18,7 +18,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 status = "healthy",
                 timestamp = DateTime.UtcNow,
-                service = "DM_MIP_OBO_WebApp"
+                service = "DM_MIP_SDK_APP"
             };
 
             return Ok(response);
