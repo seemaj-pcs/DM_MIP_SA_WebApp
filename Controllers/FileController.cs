@@ -25,33 +25,37 @@ namespace DM_MIP_SA_WebApp.Controllers
             [FromBody] FileRequest p)
         {
             var resp = new FileResponse();
+            string inputFileName = null;
+            string outputFileName = null;
             try
             {
+                if (p.FileName == null || p.FileName.Length == 0)
+                    return BadRequest("fileName is required.");
+
                 if (p.FileBase64StringContent == null || p.FileBase64StringContent.Length == 0)
-                    return BadRequest("FileBase64StringContent is required.");
+                    return BadRequest("fileBase64StringContent is required.");
+
+                if (p.FileAccessRightType == null || p.FileAccessRightType.Length == 0)
+                    return BadRequest("fileAccessRightType is required.");
 
                 List<String> rightList = p.FileAccessRightType.Split(",").ToList();
-
+                
                 var ext = Path.GetExtension(p.FileName); // returns .exe
                 var fname = Path.GetFileNameWithoutExtension(p.FileName);
                 var outputFile = fname + "_protected" + ext;
 
-                var fileName = await _fileService.ProtectFileAsync(
+                var serviceIOFiles = await _fileService.ProtectFileAsync(
                     p,
                     outputFile);
+                inputFileName = serviceIOFiles.InputFileName;
+                outputFileName = serviceIOFiles.OutputFileName;
+                ValidateFileName(outputFileName);
 
                 // Return JSON metadata, not file bytes
                 // Read unprotected file
-                var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
-
-                // Cleanup
-                if (!_fileService.getMipSdkOptions().RetainOutputFiles)
-                {
-                    System.IO.File.Delete(fileName);
-                }
+                var protectedBytes = await System.IO.File.ReadAllBytesAsync(outputFileName);
 
                 string fileBase64string = Convert.ToBase64String(protectedBytes);
-
 
                 resp.StatusCode = HttpStatusCode.OK;
                 resp.StatusMessage = "Success";
@@ -64,6 +68,21 @@ namespace DM_MIP_SA_WebApp.Controllers
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
             }
+            finally
+            {
+                // Cleanup
+                if (!_fileService.getMipSdkOptions().RetainInputFiles &&
+                    inputFileName != null && System.IO.File.Exists(inputFileName))
+                {
+                    System.IO.File.Delete(inputFileName);
+                }
+                if (!_fileService.getMipSdkOptions().RetainOutputFiles &&
+                    outputFileName != null && System.IO.File.Exists(outputFileName))
+                {
+                    System.IO.File.Delete(outputFileName);
+                }
+
+            }
             return Ok(resp);
 
         }
@@ -73,26 +92,31 @@ namespace DM_MIP_SA_WebApp.Controllers
             [FromBody] FileRequest p)
         {
             var resp = new FileResponse();
-            
+            string inputFileName = null;
+            string outputFileName = null;
             try
             {
                 if (p.FileBase64StringContent == null || p.FileBase64StringContent.Length == 0)
-                    return BadRequest("FileBase64StringContent is required.");
-                        
+                    return BadRequest("fileBase64StringContent is required.");
+
+                if (p.FileName == null || p.FileName.Length == 0)
+                    return BadRequest("fileName is required.");
+
                 var ext = Path.GetExtension(p.FileName); // returns .exe
                 var fname = Path.GetFileNameWithoutExtension(p.FileName);
                 var outputFile = fname + "_unprotected" + ext;
             
-                var fileName = await _fileService.UnprotectFileAsync(
+                var serviceIOFiles = await _fileService.UnprotectFileAsync(
                     p,
                     outputFile);
+                
+                inputFileName = serviceIOFiles.InputFileName;
+                outputFileName = serviceIOFiles.OutputFileName;
 
+                ValidateFileName(outputFileName);
                 // Return JSON metadata, not file bytes
                 // Read unprotected file
-                var unprotectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
-
-                // Cleanup
-                System.IO.File.Delete(fileName);
+                var unprotectedBytes = await System.IO.File.ReadAllBytesAsync(outputFileName);
 
                 string fileBase64string = Convert.ToBase64String(unprotectedBytes);
 
@@ -107,6 +131,21 @@ namespace DM_MIP_SA_WebApp.Controllers
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
             }
+            finally
+            {
+                // Cleanup
+                if (!_fileService.getMipSdkOptions().RetainInputFiles &&
+                    inputFileName != null && System.IO.File.Exists(inputFileName))
+                {
+                    System.IO.File.Delete(inputFileName);
+                }
+                if (!_fileService.getMipSdkOptions().RetainOutputFiles &&
+                    outputFileName != null && System.IO.File.Exists(outputFileName))
+                {
+                    System.IO.File.Delete(outputFileName);
+                }
+
+            }
             return Ok(resp);
         }
 
@@ -116,30 +155,37 @@ namespace DM_MIP_SA_WebApp.Controllers
             [FromBody] FileRequest p)
         {
             var resp = new FileResponse();
+            string inputFileName = null;
+            string outputFileName = null;
             try
             {
                 if (p.FileBase64StringContent == null || p.FileBase64StringContent.Length == 0)
-                    return BadRequest("FileBase64StringContent is required.");
+                    return BadRequest("fileBase64StringContent is required.");
+
+                if (p.FileName == null || p.FileName.Length == 0)
+                    return BadRequest("fileName is required.");
+
+                if (p.FileAccessRightType == null || p.FileAccessRightType.Length == 0)
+                    return BadRequest("fileAccessRightType is required.");
 
                 List<String> rightList = p.FileAccessRightType.Split(",").ToList();
-                       
+                 
                 var ext = Path.GetExtension(p.FileName); // returns .exe
                 var fname = Path.GetFileNameWithoutExtension(p.FileName);
                 var outputFile = fname + "_protected" + ext;
             
-                var fileName = await _fileService.AdditionalProtectFileAsync(
+                var serviceIOFiles = await _fileService.AdditionalProtectFileAsync(
                     p,
                     outputFile);
+                inputFileName = serviceIOFiles.InputFileName;
+                outputFileName = serviceIOFiles.OutputFileName;
+
+                ValidateFileName(outputFileName);
 
                 // Return JSON metadata, not file bytes
                 // Read unprotected file
-                var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
+                var protectedBytes = await System.IO.File.ReadAllBytesAsync(outputFileName);
 
-                // Cleanup
-                if (!_fileService.getMipSdkOptions().RetainOutputFiles)
-                {
-                    System.IO.File.Delete(fileName);
-                }
                 string fileBase64string = Convert.ToBase64String(protectedBytes);
 
                 resp.StatusCode = HttpStatusCode.OK;
@@ -153,6 +199,21 @@ namespace DM_MIP_SA_WebApp.Controllers
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
             }
+            finally
+            {
+                // Cleanup
+                if (!_fileService.getMipSdkOptions().RetainInputFiles &&
+                    inputFileName != null && System.IO.File.Exists(inputFileName))
+                {
+                    System.IO.File.Delete(inputFileName);
+                }
+                if (!_fileService.getMipSdkOptions().RetainOutputFiles &&
+                    outputFileName != null && System.IO.File.Exists(outputFileName))
+                {
+                    System.IO.File.Delete(outputFileName);
+                }
+
+            }
             return Ok(resp);
         }
     
@@ -162,6 +223,8 @@ namespace DM_MIP_SA_WebApp.Controllers
             [FromForm] FileRequest p)
         {
             var resp = new FileResponse();
+            string inputFileName = null;
+            string outputFileName = null;
             try
             {
                 if (p.File == null || p.File.Length == 0)
@@ -172,21 +235,20 @@ namespace DM_MIP_SA_WebApp.Controllers
 
                 if (p.FileName == null || p.FileName.Length == 0)
                     return BadRequest("FileName is required.");
-
+               
                 var ext = Path.GetExtension(p.FileName); // returns .exe
                 var fname = Path.GetFileNameWithoutExtension(p.FileName);
                 var outputFile = fname + ext;
 
-                var fileName = await _fileService.ProtectFileWithOwnerAsync(
+                var serviceIOFiles = await _fileService.ProtectFileWithOwnerAsync(
                     p,
                     outputFile);
-
+                inputFileName = serviceIOFiles.InputFileName;
+                outputFileName = serviceIOFiles.OutputFileName;
                 // Return JSON metadata, not file bytes
                 // Read unprotected file
-                var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
-                // Cleanup
-                System.IO.File.Delete(fileName);
-
+                var protectedBytes = await System.IO.File.ReadAllBytesAsync(outputFileName);
+                
                 return File(protectedBytes, "application/octet-stream",
                     $"{outputFile}");
             }
@@ -196,6 +258,21 @@ namespace DM_MIP_SA_WebApp.Controllers
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
             }
+            finally
+            {
+                // Cleanup
+                if (!_fileService.getMipSdkOptions().RetainInputFiles &&
+                    inputFileName != null && System.IO.File.Exists(inputFileName))
+                {
+                    System.IO.File.Delete(inputFileName);
+                }
+                if (!_fileService.getMipSdkOptions().RetainOutputFiles &&
+                    outputFileName != null && System.IO.File.Exists(outputFileName))
+                {
+                    System.IO.File.Delete(outputFileName);
+                }
+
+            }
             return Ok(resp);
 }
         [HttpPost("GetProtectedFileDetailsWithOwnerAlternate")]
@@ -204,6 +281,8 @@ namespace DM_MIP_SA_WebApp.Controllers
             [FromForm] FileRequest p)
         {
             var resp = new FileResponse();
+            string inputFileName = null;
+            string outputFileName = null;
             try { 
             if (p.File == null || p.File.Length == 0)
                 return BadRequest("File is required.");
@@ -214,21 +293,23 @@ namespace DM_MIP_SA_WebApp.Controllers
             if (p.FileName == null || p.FileName.Length == 0)
                 return BadRequest("FileName is required.");
 
+            
             var ext = Path.GetExtension(p.FileName); // returns .exe
             var fname = Path.GetFileNameWithoutExtension(p.FileName);
             var outputFile = fname + ext;
 
             p.OwnerEmailId = p.Email;
-            var fileName = await _fileService.ProtectFileWithOwnerAlternateAsync(
+            var serviceIOFiles = await _fileService.ProtectFileWithOwnerAlternateAsync(
                 p,
                 outputFile);
+            inputFileName = serviceIOFiles.InputFileName;
+            outputFileName = serviceIOFiles.OutputFileName;
 
+            ValidateFileName(outputFileName);
             // Return JSON metadata, not file bytes
             // Read unprotected file
-            var protectedBytes = await System.IO.File.ReadAllBytesAsync(fileName);
-            // Cleanup
-            System.IO.File.Delete(fileName);
-
+            var protectedBytes = await System.IO.File.ReadAllBytesAsync(outputFileName);
+            
             return File(protectedBytes, "application/octet-stream",
                 $"{outputFile}");
 
@@ -239,7 +320,39 @@ namespace DM_MIP_SA_WebApp.Controllers
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
             }
+            finally
+            {
+                // Cleanup
+                if (!_fileService.getMipSdkOptions().RetainInputFiles &&
+                    inputFileName != null && System.IO.File.Exists(inputFileName))
+                {
+                    System.IO.File.Delete(inputFileName);
+                }
+                if (!_fileService.getMipSdkOptions().RetainOutputFiles &&
+                    outputFileName != null && System.IO.File.Exists(outputFileName))
+                {
+                    System.IO.File.Delete(outputFileName);
+                }
+
+            }
             return Ok(resp);
         }
+        private void ValidateFileName(string fileName)
+        {
+
+            var fn = Path.GetExtension(fileName);
+
+            var fe = Path.GetFileNameWithoutExtension(fileName);
+
+            if (!System.IO.File.Exists(fileName) || fileName.Contains(".."))
+
+                throw new FileNotFoundException("File not found.", fn + fe);
+
+            if (!fileName.StartsWith(_fileService.getMipSdkOptions().OutputFolder))
+
+                throw new FileNotFoundException("File not found.", fn + fe);
+
+        }
+
     }
 }

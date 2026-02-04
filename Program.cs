@@ -34,7 +34,9 @@ namespace DM_MIP_SA_WebApp
             builder.Services.AddScoped<AuthService>();
             builder.Services.AddScoped<EmailService>();
             builder.Services.AddScoped<IFileService, FileService>();
-            
+
+            builder.Services.AddControllersWithViews(); // or AddMvc()
+            builder.Services.AddAntiforgery();
 
             // MVC / Controllers
             builder.Services.AddControllers();

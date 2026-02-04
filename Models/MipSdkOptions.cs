@@ -13,6 +13,7 @@
 
         public string ServiceAccountEmail {  get; set; } = string.Empty;
         public string InputFolder {  get; set; } = string.Empty;
+        public string OutputFolder { get; set; } = string.Empty;
         public string ProtectedFileFolder { get; set; } = string.Empty;
         public string UnprotectedFileFolder { get; set; } = string.Empty;
 

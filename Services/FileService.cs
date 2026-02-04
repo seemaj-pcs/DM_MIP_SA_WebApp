@@ -10,25 +10,31 @@ using System.Security.Claims;
 
 namespace DM_MIP_SA_WebApp.Services
 {
+    public class ServiceIOFiles
+    {
+        public string InputFileName { get; set; }
+        public string OutputFileName { get; set; }
+
+    }
     public interface IFileService
     {
-        Task<string> ProtectFileAsync(
+        Task<ServiceIOFiles> ProtectFileAsync(
             FileRequest definition,
             string outFileName);
 
-        Task<string> UnprotectFileAsync(
+        Task<ServiceIOFiles> UnprotectFileAsync(
            FileRequest definition,
            string outFileName);
 
-        Task<string> AdditionalProtectFileAsync(
+        Task<ServiceIOFiles> AdditionalProtectFileAsync(
            FileRequest definition,
            string outFileName);
 
-        Task<string> ProtectFileWithOwnerAsync(
+        Task<ServiceIOFiles> ProtectFileWithOwnerAsync(
            FileRequest definition,
            string outFileName);
 
-        Task<string> ProtectFileWithOwnerAlternateAsync(
+        Task<ServiceIOFiles> ProtectFileWithOwnerAlternateAsync(
           FileRequest definition,
           string outFileName);
 
@@ -81,7 +87,7 @@ namespace DM_MIP_SA_WebApp.Services
             }
         }
 
-        public async Task<string> ProtectFileAsync(
+        public async Task<ServiceIOFiles> ProtectFileAsync(
             FileRequest definition,
             string outFileName)
         {
@@ -91,7 +97,7 @@ namespace DM_MIP_SA_WebApp.Services
         }
 
 
-        public async Task<string> UnprotectFileAsync(
+        public async Task<ServiceIOFiles> UnprotectFileAsync(
             FileRequest definition,
             string outFileName)
         {
@@ -100,7 +106,7 @@ namespace DM_MIP_SA_WebApp.Services
             false, true, false, outFileName);
         }
 
-        public async Task<string> AdditionalProtectFileAsync(
+        public async Task<ServiceIOFiles> AdditionalProtectFileAsync(
             FileRequest definition,
             string outFileName)
         {
@@ -108,7 +114,7 @@ namespace DM_MIP_SA_WebApp.Services
             definition, false,
             true, true, true, outFileName);
         }
-        public async Task<string> ProtectFileWithOwnerAsync(
+        public async Task<ServiceIOFiles> ProtectFileWithOwnerAsync(
            FileRequest definition,
            string outFileName)
         {
@@ -116,7 +122,7 @@ namespace DM_MIP_SA_WebApp.Services
              definition, true,
              true, true, true, outFileName);
         }
-        public async Task<string> ProtectFileWithOwnerAlternateAsync(
+        public async Task<ServiceIOFiles> ProtectFileWithOwnerAlternateAsync(
            FileRequest definition,
            string outFileName)
         {
@@ -125,30 +131,31 @@ namespace DM_MIP_SA_WebApp.Services
              true, true, true, outFileName);
         }
 
-        public async Task<string> ApplyLabelAndProtectionAsync(
+        public async Task<ServiceIOFiles> ApplyLabelAndProtectionAsync(
             FileRequest definition, bool overrideOwner, bool applyLabelAndProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
             string outFileName)
         {
             _logger.LogInformation("Starting file protection for: {FileName}", definition.FileName);
 
             var inputFolder = _mipOptions.InputFolder;
-            string filePath = null;
+            string inputFilePath = null;
             if (definition.File != null)
             {
-                filePath = await CreateFileWithIFormFile(definition.File, inputFolder, definition.File.FileName);
+                inputFilePath = await CreateFileWithIFormFile(definition.File, inputFolder, definition.File.FileName);
             }
             else
             {
-                filePath = CreateFileWithFileContents(definition.FileName, definition.FileBase64StringContent, inputFolder).Result;
+                inputFilePath = CreateFileWithFileContents(definition.FileName, definition.FileBase64StringContent, inputFolder).Result;
             }
-            _logger.LogInformation($"filePath -------------- {filePath}");
-            var ext = Path.GetExtension(filePath); // returns .exe
-            var fname = Path.GetFileNameWithoutExtension(filePath);
+            var ext = Path.GetExtension(inputFilePath); // returns .exe
+            var fname = Path.GetFileNameWithoutExtension(inputFilePath);
             _logger.LogInformation($"File Extension ------------------ {ext}");
             if (_mipOptions.UnsupportedFileExtensions.Contains(ext))
             {
                 throw new Exception("Unsupported File format");
             }
+            _logger.LogInformation($"inputFilePath -------------- {inputFilePath}");
+
             var appInfo = new ApplicationInfo
             {
                 ApplicationId = _mipOptions.AppId,
@@ -274,8 +281,8 @@ namespace DM_MIP_SA_WebApp.Services
 
                 // Create handler and set protection
                 var handler = await fileEngine.CreateFileHandlerAsync(
-                        filePath,
-                        filePath,
+                        inputFilePath,
+                        inputFilePath,
                         false)
                     .ConfigureAwait(false);
 
@@ -380,9 +387,6 @@ namespace DM_MIP_SA_WebApp.Services
                     await _emailService.sendEmail(_azureAdOptions,
                             _mipOptions, _emailOptions, outfilePath, definition.Email, subject, action);
                 }
-
-
-                return outfilePath;
             }
             finally
             {
@@ -396,6 +400,12 @@ namespace DM_MIP_SA_WebApp.Services
                 catch { }
 
             }
+            ServiceIOFiles x = new ServiceIOFiles
+            {
+                InputFileName = inputFilePath,
+                OutputFileName = outfilePath
+            };
+            return x;
         }
         public MipSdkOptions getMipSdkOptions()
         {

@@ -9,7 +9,7 @@ namespace DM_MIP_SA_WebApp.Services
     internal class AuthDelegateImpl : IAuthDelegate
     {
         private readonly AuthService _authService;
-        private string _token;
+        private string _token = "";
         // userAssertionToken = incoming API access token (from Authorization: Bearer ...)
         public AuthDelegateImpl(AuthService authService)
         {

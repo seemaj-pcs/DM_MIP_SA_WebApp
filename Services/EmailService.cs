@@ -7,7 +7,6 @@ using Microsoft.Identity.Client;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 
 namespace DM_MIP_SA_WebApp.Services
