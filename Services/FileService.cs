@@ -7,6 +7,7 @@ using Microsoft.InformationProtection;
 using Microsoft.InformationProtection.File;
 using Microsoft.InformationProtection.Protection;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace DM_MIP_SA_WebApp.Services
 {
@@ -227,7 +228,9 @@ namespace DM_MIP_SA_WebApp.Services
 
             if (definition.OwnerEmailId != null && definition.OwnerEmailId.Trim().Length > 0)
             {
-                ownerEmail = definition.OwnerEmailId;
+                if(IsValidEmail(definition.OwnerEmailId.Trim())) {
+                    ownerEmail = definition.OwnerEmailId;
+                }
             }
 
             _logger.LogInformation($"Adding OWNER -------- {ownerEmail}");
@@ -458,6 +461,22 @@ namespace DM_MIP_SA_WebApp.Services
             File.WriteAllBytes(tempPath, fileBytes);
 
             return tempPath;
+        }
+
+        private static readonly Regex EmailRegex = new Regex(
+        @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Validates an email address using regex.
+        /// </summary>
+        public static bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return false;
+
+            // Trim spaces and check against regex
+            return EmailRegex.IsMatch(email.Trim());
         }
     }
 
