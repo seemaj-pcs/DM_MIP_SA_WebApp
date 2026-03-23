@@ -11,12 +11,7 @@
 
         public string OwnerEmailId { get; set; } = string.Empty;
 
-        private string fileAccessRightType = null;
+        public string FileAccessRightType { get; set; } = string.Empty;
 
-        public string FileAccessRightType   // property
-        {
-            get { return fileAccessRightType; }   // get method
-            set { fileAccessRightType = value; }  // set method
-        }
     }
 }

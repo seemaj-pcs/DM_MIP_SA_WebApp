@@ -6,6 +6,8 @@ using Microsoft.Graph.Models.Security;
 using Microsoft.InformationProtection;
 using Microsoft.InformationProtection.File;
 using Microsoft.InformationProtection.Protection;
+using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 
@@ -49,11 +51,16 @@ namespace DM_MIP_SA_WebApp.Services
         private readonly EmailOptions _emailOptions;
         private readonly EmailService _emailService;
         private readonly AzureAdOptions _azureAdOptions;
-        private readonly ILogger<FileService> _logger;
+        private readonly ILogger<IFileService> _logger;
         private readonly ILoggerFactory _loggerFactory;
         private static bool _mipInitialized;
         private static readonly object _initLock = new();
-
+        private static IFileEngine _fileEngine;
+        private static IFileProfile _fileProfile;
+        private static MipConfiguration _mipConfig;
+        private static MipContext _mipContext;
+        private static AuthDelegateImpl _authDelegate;
+        private static string _token;
         public FileService(
             IOptions<MipSdkOptions> mipOptions,
             AuthService authService,
@@ -70,6 +77,7 @@ namespace DM_MIP_SA_WebApp.Services
             _azureAdOptions = azureAdOptions.Value;
             _logger = logger;
             _loggerFactory = loggerFactory;
+
             EnsureMipInitialized();
         }
 
@@ -85,6 +93,65 @@ namespace DM_MIP_SA_WebApp.Services
                 MIP.Initialize(MipComponent.File);
                 _mipInitialized = true;
                 _logger.LogInformation("MIP SDK initialized");
+            }
+            InitMIPContext();
+            
+        }
+
+        private void InitMIPContext() {
+            lock (_initLock)
+            {
+                var appInfo = new ApplicationInfo
+                {
+                    ApplicationId = _mipOptions.AppId,
+                    ApplicationName = _mipOptions.AppName,
+                    ApplicationVersion = _mipOptions.AppVersion
+                };
+
+                // Auth delegate that uses OBO via AuthService
+                _authDelegate = new AuthDelegateImpl(_authService);
+
+                _mipConfig = new MipConfiguration(
+                    appInfo,
+                    _mipOptions.CachePath,
+                    Microsoft.InformationProtection.LogLevel.Trace,
+                            false,
+                    CacheStorageType.OnDiskEncrypted);
+
+                _mipContext = MIP.CreateMipContext(_mipConfig);
+
+                var fileProfileSettings = new FileProfileSettings(
+                    _mipContext,
+                    CacheStorageType.OnDiskEncrypted,
+                    new ConsentDelegateImpl());
+
+                _fileProfile = MIP.LoadFileProfileAsync(fileProfileSettings)
+                                                   .ConfigureAwait(false).GetAwaiter().GetResult();
+
+                var protectionProfileSettings = new ProtectionProfileSettings(
+                    _mipContext,
+                    CacheStorageType.InMemory,
+                    new ConsentDelegateImpl());
+
+                var protectionProfile = MIP.LoadProtectionProfileAsync(protectionProfileSettings)
+                                                 .ConfigureAwait(false);
+
+                var serviceAccountEmail = _mipOptions.ServiceAccountEmail;
+
+                _logger.LogInformation($"---serviceAccountEmail -- {serviceAccountEmail}");
+                var fileEngineSettings = new FileEngineSettings(
+                    _mipOptions.EngineId,
+                    _authDelegate,
+                    "",
+                    "en-US")
+                {
+                    Identity = new Microsoft.InformationProtection.Identity(serviceAccountEmail)
+                };
+
+                var identityId = $"{_mipOptions.ServiceAccountEmail}-webapi";
+
+                _fileEngine = _fileProfile.AddEngineAsync(fileEngineSettings)
+                                                          .ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
 
@@ -132,10 +199,13 @@ namespace DM_MIP_SA_WebApp.Services
              true, true, true, outFileName);
         }
 
-        public async Task<ServiceIOFiles> ApplyLabelAndProtectionAsync(
+        private async Task<ServiceIOFiles> ApplyLabelAndProtectionAsync(
             FileRequest definition, bool overrideOwner, bool applyLabelAndProtection, bool removeLabelAndProtected, bool applyAdditionalProtection,
             string outFileName)
         {
+            if (_token != null && IsTokenExpired(_token)) {
+                InitMIPContext();
+            }
             _logger.LogInformation("Starting file protection for: {FileName}", definition.FileName);
 
             var inputFolder = _mipOptions.InputFolder;
@@ -157,64 +227,13 @@ namespace DM_MIP_SA_WebApp.Services
             }
             _logger.LogInformation($"inputFilePath -------------- {inputFilePath}");
 
-            var appInfo = new ApplicationInfo
-            {
-                ApplicationId = _mipOptions.AppId,
-                ApplicationName = _mipOptions.AppName,
-                ApplicationVersion = _mipOptions.AppVersion
-            };
-
-            // Auth delegate that uses OBO via AuthService
-            var authDelegate = new AuthDelegateImpl(_authService);
-
-            var mipConfig = new MipConfiguration(
-                appInfo,
-                _mipOptions.CachePath,
-                Microsoft.InformationProtection.LogLevel.Trace,
-                false,
-                CacheStorageType.OnDiskEncrypted);
-
-            var mipContext = MIP.CreateMipContext(mipConfig);
-
-            var fileProfileSettings = new FileProfileSettings(
-                mipContext,
-                CacheStorageType.OnDiskEncrypted,
-                new ConsentDelegateImpl());
-
-            var fileProfile = await MIP.LoadFileProfileAsync(fileProfileSettings)
-                                       .ConfigureAwait(false);
-
-            var protectionProfileSettings = new ProtectionProfileSettings(
-                mipContext,
-                CacheStorageType.InMemory,
-                new ConsentDelegateImpl());
-
-            var protectionProfile = await MIP.LoadProtectionProfileAsync(protectionProfileSettings)
-                                             .ConfigureAwait(false);
-
-            var serviceAccountEmail = _mipOptions.ServiceAccountEmail;
-
-            Console.WriteLine($"---serviceAccountEmail -- {serviceAccountEmail}");
-            var fileEngineSettings = new FileEngineSettings(
-                _mipOptions.EngineId,
-                authDelegate,
-                "",
-                "en-US")
-            {
-                Identity = new Microsoft.InformationProtection.Identity(serviceAccountEmail)
-            };
-
-            var identityId = $"{_mipOptions.ServiceAccountEmail}-webapi";
-
-            var fileEngine = await fileProfile.AddEngineAsync(fileEngineSettings)
-                                              .ConfigureAwait(false);
-
-            var labels = fileEngine.SensitivityLabels;
+            
+            var labels = _fileEngine.SensitivityLabels;
             Label labelIDToApply = null;
             foreach (var label in labels)
             {
-                Console.WriteLine($"labelID - {label.Id}");
-                Console.WriteLine($"labelName - {label.Name}");
+                _logger.LogInformation($"labelID - {label.Id}");
+                _logger.LogInformation($"labelName - {label.Name}");
                 if (label.Name == _mipOptions.LabelToApply)
                 {
                     labelIDToApply = label;
@@ -283,7 +302,7 @@ namespace DM_MIP_SA_WebApp.Services
 
 
                 // Create handler and set protection
-                var handler = await fileEngine.CreateFileHandlerAsync(
+                var handler = await _fileEngine.CreateFileHandlerAsync(
                         inputFilePath,
                         inputFilePath,
                         false)
@@ -363,6 +382,10 @@ namespace DM_MIP_SA_WebApp.Services
 
                     _logger.LogInformation("Committing protected file");
                 }
+
+                _token = _authDelegate.getToken();
+                _logger.LogInformation($"-----token----{_token.Substring(0, 32)}");
+
                 var fi = new FileInfo(outfilePath);
 
                 _logger.LogInformation("File protection completed successfully - Output: {OutputPath}, Size: {Size} bytes", outfilePath, fi.Length);
@@ -393,14 +416,7 @@ namespace DM_MIP_SA_WebApp.Services
             }
             finally
             {
-                try
-                {
-                    fileEngine = null;
-                    fileProfile = null;
-                    mipContext.ShutDown();
-                    mipContext = null;
-                }
-                catch { }
+                
 
             }
             ServiceIOFiles x = new ServiceIOFiles
@@ -477,6 +493,42 @@ namespace DM_MIP_SA_WebApp.Services
 
             // Trim spaces and check against regex
             return EmailRegex.IsMatch(email.Trim());
+        }
+
+
+        public bool IsTokenExpired(string token)
+        {
+            var handler = new JwtSecurityTokenHandler();
+
+            var jwtToken = handler.ReadJwtToken(token);
+
+            var expClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "exp");
+
+            if (expClaim == null)
+            {
+                _logger.LogInformation($"====== Token has expired ========");
+                return true;
+            }
+
+            var exp = long.Parse(expClaim.Value);
+
+            var expiryDate = DateTimeOffset.FromUnixTimeSeconds(exp).AddMinutes(-5).UtcDateTime;
+
+            return expiryDate < DateTime.UtcNow;
+        }
+
+        public void Dispose()
+        {
+            // This gets called automatically when scope ends
+            _logger.LogInformation("Service disposed (descope event)");
+            try
+            {
+                _fileEngine = null;
+                _fileProfile = null;
+                _mipContext.ShutDown();
+                _mipContext = null;
+            }
+            catch { }
         }
     }
 

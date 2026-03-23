@@ -14,14 +14,15 @@ namespace DM_MIP_SA_WebApp.Controllers
     public class FileController : ControllerBase
     {
         private readonly IFileService _fileService;
-
-        public FileController(IFileService fileSvc)
+        private readonly ILogger<FileController> _logger;
+        public FileController(IFileService fileSvc, ILogger<FileController> logger)
         {
             _fileService = fileSvc;
+            _logger = logger;
         }
 
         [HttpPost("GetProtectedFileDetailsWithFile")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         public async Task<IActionResult> ProtectFileWithFile(
             [FromForm] FileRequest p)
         {
@@ -29,7 +30,7 @@ namespace DM_MIP_SA_WebApp.Controllers
 
         }
         [HttpPost("GetProtectedFileDetailsWithBase64File")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         public async Task<IActionResult> ProtectFileWithBase64File(
             [FromBody] FileRequest p)
         {
@@ -42,8 +43,10 @@ namespace DM_MIP_SA_WebApp.Controllers
             var resp = new FileResponse();
             string inputFileName = null;
             string outputFileName = null;
+            var startTime = DateTime.Now;
             try
             {
+                
                 ValidateRequest(p, isFile, true);
 
                 if (p.FileName.Contains(".."))
@@ -75,7 +78,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                _logger.LogInformation(ex.StackTrace);
                 resp.StatusCode = HttpStatusCode.BadRequest;
                 resp.StatusMessage = "Error :" + ex.Message;
                 resp.FileResponseContent = "";
@@ -84,12 +87,14 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 CleanupFiles(inputFileName, outputFileName);
             }
+            var endTime = DateTime.Now;
+            _logger.LogInformation($"Time to complete - {endTime.Subtract(startTime)}");
             return Ok(resp);
 
         }
 
         [HttpPost("GetUnProtectedFileDetailsWithFile")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> UnprotectFileWithFile(
             [FromForm] FileRequest p)
@@ -98,7 +103,7 @@ namespace DM_MIP_SA_WebApp.Controllers
         }
 
         [HttpPost("GetUnProtectedFileDetailsWithBase64File")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> UnprotectFileWithBase64File(
             [FromBody] FileRequest p)
@@ -112,8 +117,10 @@ namespace DM_MIP_SA_WebApp.Controllers
             var resp = new FileResponse();
             string inputFileName = null;
             string outputFileName = null;
+            var startTime = DateTime.Now;
             try
             {
+               
                 ValidateRequest(p, isFile, false);
 
                 var ext = Path.GetExtension(p.FileName); // returns .exe
@@ -149,11 +156,13 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 CleanupFiles(inputFileName, outputFileName);
             }
+            var endTime = DateTime.Now;
+            _logger.LogInformation($"Time to complete - {endTime.Subtract(startTime)}");
             return Ok(resp);
         }
 
         [HttpPost("AssignAdditionalUserPermissionsWithFile")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> UnprotectFileAssignAdditionalUserPermissionsWithFile(
             [FromForm] FileRequest p)
@@ -162,7 +171,7 @@ namespace DM_MIP_SA_WebApp.Controllers
         }
 
         [HttpPost("AssignAdditionalUserPermissionsWithBase64File")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> AssignAdditionalUserPermissionsWithBase64File(
             [FromBody] FileRequest p)
@@ -177,6 +186,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             var resp = new FileResponse();
             string inputFileName = null;
             string outputFileName = null;
+            var startTime = DateTime.Now;
             try
             {
                 ValidateRequest(p, isFile, true);
@@ -216,11 +226,13 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 CleanupFiles(inputFileName, outputFileName);
             }
+            var endTime = DateTime.Now;
+            _logger.LogInformation($"Time to complete - {endTime.Subtract(startTime)}");
             return Ok(resp);
         }
 
         [HttpPost("GetProtectedFileDetailsWithOwnerWithFile")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> GetProtectedFileDetailsWithOwnerWithFile(
             [FromForm] FileRequest p)
@@ -229,7 +241,7 @@ namespace DM_MIP_SA_WebApp.Controllers
 
         }
         [HttpPost("GetProtectedFileDetailsWithOwnerWithBase64File")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> GetProtectedFileDetailsWithOwnerWithBase64File(
             [FromBody] FileRequest p)
@@ -243,14 +255,17 @@ namespace DM_MIP_SA_WebApp.Controllers
             var resp = new FileResponse();
             string inputFileName = null;
             string outputFileName = null;
+            var startTime = DateTime.Now;
             try
             {
+                
                 ValidateRequest(p, isFile, true);
 
                 var ext = Path.GetExtension(p.FileName); // returns .exe
                 var fname = Path.GetFileNameWithoutExtension(p.FileName);
                 var outputFile = fname + ext;
 
+                p.OwnerEmailId = p.Email;
                 var serviceIOFiles = await _fileService.ProtectFileWithOwnerAsync(
                     p,
                     outputFile);
@@ -277,11 +292,13 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 CleanupFiles(inputFileName, outputFileName);
             }
+            var endTime = DateTime.Now;
+            _logger.LogInformation($"Time to complete - {endTime.Subtract(startTime)}");
             return Ok(resp);
         }
 
         [HttpPost("GetProtectedFileDetailsWithOwnerAlternateWithFile")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> GetProtectedFileDetailsWithOwnerAlternateWithFile(
             [FromForm] FileRequest p)
@@ -290,7 +307,7 @@ namespace DM_MIP_SA_WebApp.Controllers
 
         }
         [HttpPost("GetProtectedFileDetailsWithOwnerAlternateWithBase64File")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(60_000_000)]
         
         public async Task<IActionResult> GetProtectedFileDetailsWithOwnerAlternateWithBase64File(
             [FromBody] FileRequest p)
@@ -304,8 +321,10 @@ namespace DM_MIP_SA_WebApp.Controllers
             var resp = new FileResponse();
             string inputFileName = null;
             string outputFileName = null;
-            try {
-
+            var startTime = DateTime.Now;
+            try 
+            {
+                
                 ValidateRequest(p, isFile, true);
 
                 var ext = Path.GetExtension(p.FileName); // returns .exe
@@ -341,6 +360,8 @@ namespace DM_MIP_SA_WebApp.Controllers
             {
                 CleanupFiles(inputFileName, outputFileName);
             }
+            var endTime = DateTime.Now;
+            _logger.LogInformation($"Time to complete - {endTime.Subtract(startTime)}");
             return Ok(resp);
         }
 
@@ -371,9 +392,9 @@ namespace DM_MIP_SA_WebApp.Controllers
             //{
             //    throw new Exception("fileName is invalid.");
             //}
-            Console.WriteLine("-----Request--------");
+            _logger.LogInformation("-----Request--------");
             string jsonString = JsonSerializer.Serialize(p);
-            Console.WriteLine(jsonString);
+            _logger.LogInformation(jsonString);
         }
         private void CleanupFiles(string inputFileName, string outputFileName)
         {
@@ -395,7 +416,7 @@ namespace DM_MIP_SA_WebApp.Controllers
             }
             catch(Exception e)
             {
-                Console.WriteLine(e.StackTrace);
+                _logger.LogInformation(e.StackTrace);
             }
         }
         private void ValidateFileName(string fileName)

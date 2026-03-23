@@ -40,7 +40,10 @@ namespace DM_MIP_SA_WebApp
 
             // MVC / Controllers
             builder.Services.AddControllers();
-
+            builder.Logging.AddConsole(options =>
+            {
+                options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffK ";
+            });
             var app = builder.Build();
 
             //app.UseHttpsRedirection();

@@ -13,6 +13,10 @@ namespace DM_MIP_SA_WebApp.Services
 {
     public class EmailService
     {
+        private readonly ILogger<EmailService> _logger;
+        public EmailService(ILogger<EmailService> logger) {
+            _logger = logger;
+        } 
         public async Task<string> sendEmail(AzureAdOptions azureOptions,
             MipSdkOptions mipSdkOptions, EmailOptions emailOptions, 
             string fileName, string recepient, string subject, string action)
@@ -31,7 +35,7 @@ namespace DM_MIP_SA_WebApp.Services
 
             string graphAccessToken = oboResult.Result.AccessToken;
 
-            Console.WriteLine($"UserToke - {graphAccessToken}");
+            _logger.LogInformation($"UserToke - {graphAccessToken}");
 
             var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Authorization =
@@ -69,7 +73,7 @@ namespace DM_MIP_SA_WebApp.Services
             var json = System.Text.Json.JsonSerializer.Serialize(emailPayload);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            Console.WriteLine("Sending email--------------!");
+            _logger.LogInformation("Sending email--------------!");
             var response = await httpClient.PostAsync(
                 "https://graph.microsoft.com/v1.0/users/" + mipSdkOptions.ServiceAccountEmail+ "/sendMail",
                 content);
@@ -78,7 +82,7 @@ namespace DM_MIP_SA_WebApp.Services
 
             // 7. Send the mail
 
-            Console.WriteLine("Email sent successfully!");
+            _logger.LogInformation("Email sent successfully!");
             return "Email sent successfully";
 
         }

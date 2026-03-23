@@ -14,7 +14,6 @@ namespace DM_MIP_SA_WebApp.Services
         public AuthDelegateImpl(AuthService authService)
         {
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
-            
         }
 
         // Called by the MIP SDK when it needs a token
